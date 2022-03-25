@@ -28,8 +28,7 @@ import warnings
 import configparser
 
 # Get version from git
-#__version__ = subprocess.check_output(["git", "describe"]).strip().decode('UTF-8')
-__version__ = 'v2.0.0'
+__version__ = 'v2.0.1'
 
 binsize = 1000000
 base_phred_quality = 0
