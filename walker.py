@@ -28,8 +28,7 @@ import warnings
 import configparser
 
 # Get version from git
-#__version__ = subprocess.check_output(["git", "describe"]).strip().decode('UTF-8')
-__version__ = 'v2.0.0'
+__version__ = 'v2.0.1'
 
 binsize = 1000000
 base_phred_quality = 0
@@ -172,8 +171,9 @@ def parse_chr_vcf(q, q_out, somatic_contig_vcf_reader, germline_contig_vcf_reade
                 other = {}
                 if record.is_indel:
                     continue
-                sample_names = record.INFO['CLONAL_SAMPLE_NAMES']
-                sample_names.extend(record.INFO['SUBCLONAL_SAMPLE_NAMES'])
+                #sample_names = record.INFO['CLONAL_SAMPLE_NAMES']
+                #sample_names.extend(record.INFO['SUBCLONAL_SAMPLE_NAMES'])
+                sample_names = somatic_samples
                 for sample_name in sample_names:
                     if sample_name == '' or sample_name not in somatic_samples:
                         continue
@@ -458,7 +458,7 @@ def merge_tmp_files():
                 os.system('cat walker_tmp/{}_walker.bed >> {}_walker.bed'.format(contig, somatic_vcf_name))
 
     time.sleep(5)
-    os.system("rm -rf walker_tmp")
+#    os.system("rm -rf walker_tmp")
 if __name__ == "__main__":
     main()
     merge_tmp_files()
