@@ -28,9 +28,9 @@ import warnings
 import configparser
 
 # Get version from git
-__version__ = 'v2.0.1'
+__version__ = 'v2.0.2'
 
-binsize = 1000000
+binsize = 10000000
 base_phred_quality = 0
 mapq = 0
 read_length = 150
