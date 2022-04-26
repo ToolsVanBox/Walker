@@ -28,7 +28,7 @@ import warnings
 import configparser
 
 # Get version from git
-__version__ = 'v2.0.2'
+__version__ = 'v2.1.2'
 
 binsize = 10000000
 base_phred_quality = 0
@@ -41,6 +41,7 @@ parser = argparse.ArgumentParser(description='Put here a description.')
 parser.add_argument('-g', '--germline', type=str, help='Input germline indexed vcf.gz file', required=True)
 parser.add_argument('-s', '--somatic', type=str, help='Input somatic SMuRF_filtered indexed vcf.gz file', required=True)
 parser.add_argument('-b', '--bam', action='append', nargs="*", type=str, help='Input bam file', required=True)
+parser.add_argument('-o', '--output', type=str, help='Output prefix')
 parser.add_argument('-f', '--format', action='append', nargs="*", type=str, choices=['vcf','bed','txt'], help='Output format', required=False)
 parser.add_argument('-t', '--threads', type=int, help='Number of threads',default=8, required=False)
 parser.add_argument('-v', '--version', action='version', version=__version__)
@@ -52,8 +53,9 @@ args.format = [x for l in args.format for x in l]
 
 # Read the vcf, fix and add fields to the header
 somatic_vcf_reader = pyvcf.Reader(filename=args.somatic, encoding='utf-8')
-somatic_vcf_name = os.path.basename(args.somatic)
-somatic_vcf_name = somatic_vcf_name.replace(".vcf.gz","")
+somatic_vcf_name = args.output
+# somatic_vcf_name = os.path.basename(args.somatic)
+# somatic_vcf_name = somatic_vcf_name.replace(".vcf.gz","")
 somatic_samples = somatic_vcf_reader.samples
 germline_vcf_reader = pyvcf.Reader(filename=args.germline, encoding='utf-8')
 
@@ -152,11 +154,11 @@ def parse_chr_vcf(q, q_out, somatic_contig_vcf_reader, germline_contig_vcf_reade
             contig_start = int(contig_start)
             contig_end = int(contig_end)
             if 'txt' in args.format:
-                contig_walker_txt_writer = open('./walker_tmp/{}_walker.txt'.format(contig),'w', encoding='utf-8')
+                contig_walker_txt_writer = open('./walker_tmp/{}.walker.txt'.format(contig),'w', encoding='utf-8')
             if 'bed' in args.format:
-                contig_walker_bed_writer = open('./walker_tmp/{}_walker.bed'.format(contig),'w', encoding='utf-8')
+                contig_walker_bed_writer = open('./walker_tmp/{}.walker.bed'.format(contig),'w', encoding='utf-8')
             if 'vcf' in args.format:
-                contig_walker_vcf_writer = pyvcf.Writer(open('./walker_tmp/{}_walker.vcf'.format(contig),'w', encoding='utf-8'), somatic_contig_vcf_reader)
+                contig_walker_vcf_writer = pyvcf.Writer(open('./walker_tmp/{}.walker.vcf'.format(contig),'w', encoding='utf-8'), somatic_contig_vcf_reader)
             try:
                 # Try to parse the specific contig from the vcf
                 somatic_contig_vcf_reader.fetch(contig_chr, contig_start, contig_end)
@@ -166,19 +168,20 @@ def parse_chr_vcf(q, q_out, somatic_contig_vcf_reader, germline_contig_vcf_reade
                 continue
 
             for record in somatic_contig_vcf_reader.fetch(contig_chr, contig_start, contig_end):
-                cis = {}
-                trans = {}
-                other = {}
-                if record.is_indel:
-                    continue
-                #sample_names = record.INFO['CLONAL_SAMPLE_NAMES']
-                #sample_names.extend(record.INFO['SUBCLONAL_SAMPLE_NAMES'])
+                # if record.is_indel:
+                #     continue
                 sample_names = somatic_samples
                 for sample_name in sample_names:
+                    cis = {}
+                    trans = {}
+                    other = {}
                     if sample_name == '' or sample_name not in somatic_samples:
                         continue
                     if record.genotype(sample_name).is_het:
                         somatic_alignments = get_somatic_alignments( record, sample_name )
+                        # print( somatic_alignments )
+                        # if somatic_alignments == False:
+                        #     continue
                         for somatic_alignment in somatic_alignments:
                             somatic_base_info = somatic_alignment[0]
                             somatic_align = somatic_alignment[1]
@@ -197,16 +200,38 @@ def parse_chr_vcf(q, q_out, somatic_contig_vcf_reader, germline_contig_vcf_reade
                                     if gl_record_info not in other:
                                         other[gl_record_info] = []
 
-                                    if (linked_gl_base_info[2] == gl_record.REF and somatic_base_info[2] == record.REF):
-                                        cis[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
-                                    elif (linked_gl_base_info[2] == gl_record.ALT[0] and somatic_base_info[2] == record.ALT[0]):
-                                        cis[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
-                                    elif (linked_gl_base_info[2] == gl_record.REF and somatic_base_info[2] == record.ALT[0]):
-                                        trans[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
-                                    elif (linked_gl_base_info[2] == gl_record.ALT[0] and somatic_base_info[2] == record.REF):
-                                        trans[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                    if record.is_indel:
+                                        # Deletion
+                                        if (linked_gl_base_info[2] == gl_record.REF and somatic_base_info[2] == 0 and len(record.REF) == 1):
+                                            cis[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.ALT[0] and somatic_base_info[2] > 0 and len(record.ALT[0]) > 1):
+                                            cis[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.REF and somatic_base_info[2] > 0 and len(record.ALT[0]) > 1):
+                                            trans[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.ALT[0] and somatic_base_info[2] == len(record.REF) == 1):
+                                            trans[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        # Insertion
+                                        elif (linked_gl_base_info[2] == gl_record.REF and somatic_base_info[2] == 0 and len(record.REF) > 1):
+                                            cis[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.ALT[0] and somatic_base_info[2] < 0 and len(record.ALT[0]) == 1):
+                                            cis[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.REF and somatic_base_info[2] < 0 and len(record.ALT[0]) == 1):
+                                            trans[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.ALT[0] and somatic_base_info[2] == len(record.REF) > 1):
+                                            trans[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        else:
+                                            other[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
                                     else:
-                                        other[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        if (linked_gl_base_info[2] == gl_record.REF and somatic_base_info[2] == record.REF):
+                                            cis[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.ALT[0] and somatic_base_info[2] == record.ALT[0]):
+                                            cis[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.REF and somatic_base_info[2] == record.ALT[0]):
+                                            trans[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        elif (linked_gl_base_info[2] == gl_record.ALT[0] and somatic_base_info[2] == record.REF):
+                                            trans[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
+                                        else:
+                                            other[gl_record_info].append((linked_gl_base_info[3],somatic_base_info[3]))
                     scores = []
                     for gl_info in cis:
                         cis_qual = sum(map(sum,cis[gl_info]))
@@ -362,6 +387,12 @@ def get_somatic_alignments( record, sample_name ):
                         base = pileupread.alignment.query_sequence[pileupread.query_position]
                         base_qual = pileupread.alignment.query_qualities[pileupread.query_position]
                         alignments.append(((record.CHROM,record.POS,base,base_qual),pileupread.alignment))
+                    # If variant is INDEL
+                    else:
+                        base = pileupread.indel
+                        base_qual = pileupread.alignment.query_qualities[pileupread.query_position]
+                        alignments.append(((record.CHROM,record.POS,base,base_qual),pileupread.alignment))
+
     return( alignments )
 
 def default_to_regular(d):
@@ -378,10 +409,10 @@ def get_linked_gl_records( germline_contig_vcf_reader, sample_name, contig_chr, 
         # Skip contig if it is not present in the vcf file
         return( records )
     for record in germline_contig_vcf_reader.fetch(contig_chr, contig_start, contig_end):
-        if ((record.ID and "COSM" not in record.ID) or ("ControlEvidence" in record.FILTER) ) and not record.is_indel:
-            for call in record.samples:
-                if call.sample == sample_name and call.is_het:
-                    records.append(record)
+        # if ((record.ID and "COSM" not in record.ID) or ("ControlEvidence" in record.FILTER) ) and not record.is_indel:
+            # for call in record.samples:
+                # if call.sample == sample_name and call.is_het:
+        records.append(record)
     return( records )
 
 def check_pileupread( pileupread ):
@@ -447,15 +478,15 @@ def merge_tmp_files():
     for contig in contig_list:
         if not header:
             if 'vcf' in args.format:
-                os.system('cat walker_tmp/{}_walker.vcf > {}_walker.vcf'.format(contig, somatic_vcf_name))
+                os.system('cat walker_tmp/{}.walker.vcf > {}.walker.vcf'.format(contig, somatic_vcf_name))
             header = True
         else:
             if 'vcf' in args.format:
-                os.system('grep -v \'^#\' walker_tmp/{}_walker.vcf >> {}_walker.vcf'.format(contig, somatic_vcf_name))
+                os.system('grep -v \'^#\' walker_tmp/{}.walker.vcf >> {}.walker.vcf'.format(contig, somatic_vcf_name))
             if 'txt' in args.format:
-                os.system('cat walker_tmp/{}_walker.txt >> {}_walker.txt'.format(contig, somatic_vcf_name))
+                os.system('cat walker_tmp/{}.walker.txt >> {}.walker.txt'.format(contig, somatic_vcf_name))
             if 'bed' in args.format:
-                os.system('cat walker_tmp/{}_walker.bed >> {}_walker.bed'.format(contig, somatic_vcf_name))
+                os.system('cat walker_tmp/{}.walker.bed >> {}.walker.bed'.format(contig, somatic_vcf_name))
 
     time.sleep(5)
 #    os.system("rm -rf walker_tmp")
