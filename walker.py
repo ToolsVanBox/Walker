@@ -28,7 +28,7 @@ import warnings
 import configparser
 
 # Get version from git
-__version__ = 'v2.1.2'
+__version__ = 'v2.2.0'
 
 binsize = 10000000
 base_phred_quality = 0
@@ -410,9 +410,10 @@ def get_linked_gl_records( germline_contig_vcf_reader, sample_name, contig_chr, 
         return( records )
     for record in germline_contig_vcf_reader.fetch(contig_chr, contig_start, contig_end):
         # if ((record.ID and "COSM" not in record.ID) or ("ControlEvidence" in record.FILTER) ) and not record.is_indel:
-            # for call in record.samples:
-                # if call.sample == sample_name and call.is_het:
-        records.append(record)
+        # for call in record.samples:
+            # if call.sample == sample_name and call.is_het:
+        if record.genotype(sample_name).is_het:
+            records.append(record)
     return( records )
 
 def check_pileupread( pileupread ):
@@ -476,17 +477,16 @@ def merge_tmp_files():
     header = False
     # Loop through all chromomsomes
     for contig in contig_list:
-        if not header:
-            if 'vcf' in args.format:
+        if 'vcf' in args.format:
+            if not header:
                 os.system('cat walker_tmp/{}.walker.vcf > {}.walker.vcf'.format(contig, somatic_vcf_name))
-            header = True
-        else:
-            if 'vcf' in args.format:
+                header = True
+            else:
                 os.system('grep -v \'^#\' walker_tmp/{}.walker.vcf >> {}.walker.vcf'.format(contig, somatic_vcf_name))
-            if 'txt' in args.format:
-                os.system('cat walker_tmp/{}.walker.txt >> {}.walker.txt'.format(contig, somatic_vcf_name))
-            if 'bed' in args.format:
-                os.system('cat walker_tmp/{}.walker.bed >> {}.walker.bed'.format(contig, somatic_vcf_name))
+        if 'txt' in args.format:
+            os.system('cat walker_tmp/{}.walker.txt >> {}.walker.txt'.format(contig, somatic_vcf_name))
+        if 'bed' in args.format:
+            os.system('cat walker_tmp/{}.walker.bed >> {}.walker.bed'.format(contig, somatic_vcf_name))
 
     time.sleep(5)
 #    os.system("rm -rf walker_tmp")
